@@ -215,15 +215,31 @@ def docx_convert_paragraph_text_to_markdown(paragraph):
 def docx_convert_to_markdown(*paragraphs):
 	md = ""
 	start_of_list = True
+	start_of_code = True
+	end_of_code = False
 	for paragraph in paragraphs:
 		if paragraph.style.name == "List Paragraph":
+			if end_of_code:
+				md += "\n```"
 			if start_of_list:
 				md += "\n"
 			md += "\n- " + docx_convert_paragraph_text_to_markdown(paragraph)
 			start_of_list = False
+		elif paragraph.style.name == "Code":
+			if start_of_code:
+				md += "\n\n```"
+			md += "\n" + paragraph.text
+			start_of_code = False
+			end_of_code = True
 		else:
+			if end_of_code:
+				md += "\n```"
 			md += "\n\n" + docx_convert_paragraph_text_to_markdown(paragraph)
 			start_of_list = True
+			start_of_code = True
+			end_of_code = False
+	if end_of_code:
+		md += "\n```"
 	return md.strip()
 
 
