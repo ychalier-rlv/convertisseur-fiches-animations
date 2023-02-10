@@ -1,7 +1,3 @@
 __pycache__
-*.ipynb
-*.docx
-*.md
-*.xml
-*.json
 *.ps1
+animations/
