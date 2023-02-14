@@ -196,6 +196,9 @@ def docx_convert_paragraph_text_to_markdown(paragraph):
 							child_is_bold = True
 						elif sub_sub_child.tag == NS + "i":
 							child_is_italic = True
+			if child_text.strip() == "":
+				text += " "
+				continue
 			if child_is_bold and child_is_italic:
 				text += f"**_{ child_text.strip() }_** "
 			elif child_is_bold:
@@ -209,6 +212,7 @@ def docx_convert_paragraph_text_to_markdown(paragraph):
 			link_url = paragraph.part.rels[child.attrib[NSR + "id"]].target_ref
 			text += f"[{ link_text }]({ link_url }) "
 	text = re.sub(r"([\(\[]) ", r"\1", re.sub(r" ([,\.\)\]])", r"\1", text))
+	text = re.sub(r" +", " ", text)
 	return text
 
 
