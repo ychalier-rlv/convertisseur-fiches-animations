@@ -211,7 +211,7 @@ def docx_convert_paragraph_text_to_markdown(paragraph):
 			link_text = child.find(NS + "r").find(NS + "t").text
 			link_url = paragraph.part.rels[child.attrib[NSR + "id"]].target_ref
 			text += f"[{ link_text }]({ link_url }) "
-	text = re.sub(r"([\(\[]) ", r"\1", re.sub(r" ([,\.\)\]])", r"\1", text))
+	text = re.sub(r"([\(\[]) ", r"\1", re.sub(r" ([’,\.\)\]])", r"\1", text))
 	text = re.sub(r" +", " ", text)
 	return text
 
