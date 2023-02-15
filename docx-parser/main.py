@@ -102,7 +102,10 @@ class AnimationStep:
 	def to_markdown(self):
 		md = ""
 		if self.title is not None:
-			md += f"### { self.title } ({ self.duration } min)\n\n"
+			if self.duration is None:
+				md += f"### { self.title }\n\n"
+			else:
+				md += f"### { self.title } ({ self.duration } min)\n\n"
 		md += f"{ self.content }\n\n"
 		return md
 
@@ -290,7 +293,7 @@ class DocumentParser:
 					i += 1
 				step = AnimationStep()
 				if self.section[j].style.name == "Heading 2":
-					match = re.search("^(.+) (?:\((\d+) min(?:utes?)?\))?$", self.section[j].text.strip())
+					match = re.search("^(.+)(?: \((\d+) min(?:utes?)?\))?$", self.section[j].text.strip())
 					if match is None:
 						continue
 					step.title = match.group(1)
@@ -302,7 +305,7 @@ class DocumentParser:
 				j = i + 1
 				i += 1
 		else:
-			self.animation.others[self.section[0].text] = docx_convert_to_markdown(*self.section[1:])	
+			self.animation.others[self.section[0].text] = docx_convert_to_markdown(*self.section[1:])
 	
 	def add_resources_file(self, path):
 		split = os.path.splitext(os.path.basename(path))
@@ -432,10 +435,13 @@ def main():
 	if os.path.isfile(db_path):
 		with open(db_path, "r", encoding="utf8") as file:
 			db = json.load(file)
-	for animation_path in tqdm.tqdm(find_animation_paths(args.input_path), unit="file"):
+	pbar = tqdm.tqdm(find_animation_paths(args.input_path), unit="file")
+	for animation_path in pbar:
+		pbar.set_description(os.path.basename(os.path.dirname(animation_path)))
 		animation = DocumentParser(animation_path).parse()
 		db[animation_path] = animation.to_dict()
 		generate_animation_output(animation, args.output_path, copy_resources=not args.no_copy)
+	pbar.close()
 	with open(db_path, "w", encoding="utf8") as file:
 		json.dump(db, file, indent=4, default=str)
 
