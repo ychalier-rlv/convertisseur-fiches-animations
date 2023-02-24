@@ -180,43 +180,87 @@ def sizeof_fmt(num, suffix="o"):
 	return f"{num:.1f}Yi{suffix}"
 
 
-def docx_convert_paragraph_text_to_markdown(paragraph):
-	text = ""
-	root = xml.etree.ElementTree.fromstring(paragraph._element.xml)
-	NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-	NSR = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
-	for child in root:
-		if child.tag == NS + "r":
-			child_is_bold = False
-			child_is_italic = False
-			child_text = ""
-			for sub_child in child:
+NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+NSR = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+
+
+class TextElement:
+
+	def __init__(self, text="", bold=False, italic=False, href=None):
+		self.text = text
+		self.bold = bold
+		self.italic = italic
+		self.href = href
+	
+	@classmethod
+	def from_xml(cls, paragraph, xml):
+		obj = cls()
+		if xml.tag == NS + "r":
+			for sub_child in xml:
 				if sub_child.tag == NS + "t":
-					child_text += sub_child.text
+					obj.text += sub_child.text
 				elif sub_child.tag == NS + "rPr":
 					for sub_sub_child in sub_child:
 						if sub_sub_child.tag == NS + "b":
-							child_is_bold = True
+							obj.bold = True
 						elif sub_sub_child.tag == NS + "i":
-							child_is_italic = True
-			if child_text.strip() == "":
-				text += " "
-				continue
-			if child_is_bold and child_is_italic:
-				text += f"**_{ child_text.strip() }_** "
-			elif child_is_bold:
-				text += f"__{ child_text.strip() }__ "
-			elif child_is_italic:
-				text += f"_{ child_text.strip() }_ "
-			else:
-				text += child_text.strip() + " "
-		elif child.tag == NS + "hyperlink":
-			link_text = child.find(NS + "r").find(NS + "t").text
-			link_url = paragraph.part.rels[child.attrib[NSR + "id"]].target_ref
-			text += f"[{ link_text }]({ link_url }) "
+							obj.italic = True
+		elif xml.tag == NS + "hyperlink":
+			for sub_child in xml:
+				if sub_child.tag == NS + "r":
+					for sub_sub_child in sub_child:
+						if sub_sub_child.tag == NS + "t":
+							obj.text += sub_sub_child.text
+			obj.href = paragraph.part.rels[xml.attrib[NSR + "id"]].target_ref
+		return obj
+	
+	def to_markdown(self):
+		if self.href is not None:
+			return f"[{ self.text }]({ self.href })"
+		elif self.bold and self.italic:
+			return f"__*{ self.text.strip() }*__ "
+		elif self.bold:
+			return f"__{ self.text.strip() }__ "
+		elif self.italic:
+			return f"_{ self.text.strip() }_ "
+		else:
+			return self.text
+
+
+def extract_text_elements(paragraph):
+	root = xml.etree.ElementTree.fromstring(paragraph._element.xml)
+	return [
+		TextElement.from_xml(paragraph, child)
+		for child in root
+	]
+
+
+def merge_text_elements(elements):
+	i = 1
+	while i < len(elements):
+		if elements[i - 1].bold == elements[i].bold and elements[i - 1].italic == elements[i].italic and elements[i - 1].href is None and elements[i].href is None:
+			elements[i - 1].text += elements[i].text
+			elements.pop(i)
+		elif elements[i - 1].href is not None and elements[i - 1].href == elements[i].href:
+			elements[i - 1].text += elements[i].text
+			elements.pop(i)
+		else:
+			i += 1
+
+
+def convert_text_elements_to_markdown(elements):
+	text = ""
+	for element in elements:
+		text += element.to_markdown()
 	text = re.sub(r"([\(\[]) ", r"\1", re.sub(r" ([’,\.\)\]])", r"\1", text))
 	text = re.sub(r" +", " ", text)
 	return text
+
+
+def docx_convert_paragraph_text_to_markdown(paragraph):
+	elements = extract_text_elements(paragraph)
+	merge_text_elements(elements)	
+	return convert_text_elements_to_markdown(elements)
 
 
 def docx_convert_to_markdown(*paragraphs):
@@ -293,7 +337,7 @@ class DocumentParser:
 					i += 1
 				step = AnimationStep()
 				if self.section[j].style.name == "Heading 2":
-					match = re.search("^(.+)(?: \((\d+) min(?:utes?)?\))?$", self.section[j].text.strip())
+					match = re.search(r"^(.+?)(?: \((\d+) min(?:utes?)?\))?$", self.section[j].text.strip())
 					if match is None:
 						continue
 					step.title = match.group(1)
@@ -346,7 +390,7 @@ class DocumentParser:
 		for path in glob.glob(os.path.join(os.path.dirname(self.path), "*")):
 			if path == self.path:
 				continue
-			if os.path.splitext(path)[1] == ".lnk":
+			if os.path.splitext(path)[1] == ".lnk" or os.path.splitext(path)[1] == ".db":
 				continue
 			elif os.path.splitext(path)[1] == ".url":
 				self.add_resources_url(path)
