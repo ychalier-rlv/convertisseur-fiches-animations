@@ -387,10 +387,20 @@ class DocumentParser:
 		})
 
 	def parse_resources(self):
-		for path in glob.glob(os.path.join(os.path.dirname(self.path), "*")):
+		folder = os.path.dirname(self.path)
+		ignore_file_path = os.path.join(folder, ".ignore")
+		ignore = set()
+		if os.path.isfile(ignore_file_path):
+			with open(ignore_file_path, "r", encoding="utf8") as file:
+				for line in file.readlines():
+					if line.strip() != "":
+						ignore.add(line.strip())
+		for path in glob.glob(os.path.join(folder, "*")):
 			if path == self.path:
 				continue
 			if os.path.splitext(path)[1] == ".lnk" or os.path.splitext(path)[1] == ".db":
+				continue
+			if os.path.basename(path) in ignore:
 				continue
 			elif os.path.splitext(path)[1] == ".url":
 				self.add_resources_url(path)
